@@ -138,7 +138,7 @@ function initMap(){
   const sat = L.tileLayer(ign("ORTHOIMAGERY.ORTHOPHOTOS", "image/jpeg"), {maxZoom: 19, attribution: "IGN-F/Géoportail"});
   const plan = L.tileLayer(ign("GEOGRAPHICALGRIDSYSTEMS.PLANIGNV2", "image/png"), {maxZoom: 19, attribution: "IGN-F/Géoportail"});
   const osm = L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {maxZoom: 19, attribution: "© OpenStreetMap"});
-  map = L.map("map", {layers: [sat], scrollWheelZoom: false});
+  map = L.map("map", {layers: [sat], scrollWheelZoom: true});
   L.control.layers({"Satellite": sat, "Plan IGN": plan, "OpenStreetMap": osm}, null, {position: "topright"}).addTo(map);
   pondLayer = L.layerGroup().addTo(map);
   map.setView([loc.lat, loc.lon], 11);
