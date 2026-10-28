@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Carpomètre</title>
+<meta name="description" content="La météo traduite en touches : note carpe heure par heure, meilleurs créneaux, carte des étangs et carnet de prises.">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="brand"><h1>Carpomètre</h1><span>la météo traduite en touches</span></div>
+    <form class="search" id="searchForm" role="search">
+      <label for="q" class="sr">Ville ou village</label>
+      <input id="q" type="search" placeholder="Ville, village…" autocomplete="off">
+      <button type="submit">Chercher</button>
+      <button type="button" id="geo" title="Utiliser ma position">Autour de moi</button>
+      <ul id="results" class="results" hidden></ul>
+    </form>
+  </header>
+
+  <p class="place" id="place">Chargement…</p>
+
+  <div class="days" id="days" role="tablist" aria-label="Jour"></div>
+
+  <div class="hero">
+    <svg class="dial" viewBox="0 0 300 200" role="img" aria-label="Note carpe">
+      <g id="arc"></g>
+      <text id="score" x="150" y="150" text-anchor="middle" class="dial-num"></text>
+      <text x="150" y="178" text-anchor="middle" class="dial-sub">sur 100</text>
+    </svg>
+    <div class="verdict">
+      <div class="label" id="selhour"></div>
+      <h2 id="headline"></h2>
+      <p id="summary"></p>
+      <div class="conds">
+        <div><span class="label">Pression</span><b id="cP"></b></div>
+        <div><span class="label">Tendance 6 h</span><b id="cT"></b></div>
+        <div><span class="label">Vent</span><b id="cW"></b></div>
+        <div><span class="label">Air</span><b id="cA"></b></div>
+      </div>
+    </div>
+  </div>
+
+  <section>
+    <h3>Heure par heure</h3>
+    <div class="timeline"><div class="bars" id="bars"></div><div class="hours" id="hours"></div></div>
+    <div class="legend">
+      <span style="--c:var(--good)">Favorable (65+)</span>
+      <span style="--c:var(--mid)">Possible</span>
+      <span style="--c:var(--bad)">Difficile (moins de 45)</span>
+      <span style="--c:var(--reed)">Prise au carnet</span>
+    </div>
+  </section>
+
+  <div class="two">
+    <section><h3>Meilleurs créneaux</h3><ul class="windows" id="windows"></ul></section>
+    <section><h3>Pourquoi cette note</h3><div class="factors" id="factors"></div></section>
+  </div>
+
+  <section>
+    <h3>Étangs autour</h3>
+    <div class="mapgrid">
+      <div class="map" id="map"></div>
+      <div class="pondcard" id="pondcard"><p class="muted">Touchez un étang sur la carte.</p></div>
+    </div>
+    <p class="note" id="pondnote">Étangs détaillés + plans d'eau trouvés sur OpenStreetMap dans un rayon de 15 km.</p>
+  </section>
+
+  <section>
+    <h3>Mon carnet de prises</h3>
+    <form class="catch" id="catchForm">
+      <div><label for="cDate">Date et heure</label><input id="cDate" type="datetime-local" required></div>
+      <div><label for="cPond">Étang</label><input id="cPond" type="text" placeholder="Étang des Saules" required></div>
+      <div><label for="cWeight">Poids (kg)</label><input id="cWeight" type="number" step="0.1" min="0"></div>
+      <div><label for="cBait">Appât</label><input id="cBait" type="text" placeholder="Bouillette 20 mm"></div>
+      <button type="submit">Ajouter la prise</button>
+    </form>
+    <ul class="catches" id="catches"></ul>
+    <p class="note">Le carnet est enregistré sur cet appareil. Chaque prise garde la pression, le vent et la note du moment.</p>
+  </section>
+
+  <section class="premium">
+    <div class="prem-head"><h3>Carpomètre Premium</h3><span class="price">bientôt</span></div>
+    <div class="feats">
+      <div class="feat"><h4>Prévisions 7 jours</h4><p>Les créneaux heure par heure sur la semaine.</p></div>
+      <div class="feat"><h4>Alertes</h4><p>Prévenu la veille quand les conditions deviennent bonnes sur votre étang.</p></div>
+      <div class="feat"><h4>Carnet synchronisé</h4><p>Vos prises sur téléphone et ordinateur, avec les statistiques de votre plan d'eau.</p></div>
+      <div class="feat"><h4>Infos communautaires</h4><p>Prises récentes et postes productifs signalés par les pêcheurs.</p></div>
+    </div>
+  </section>
+
+  <footer>
+    Météo : <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo</a> (CC BY 4.0) ·
+    Photos aériennes : <a href="https://www.ign.fr/" target="_blank" rel="noopener">IGN</a> ·
+    Plans d'eau : © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">contributeurs OpenStreetMap</a>.
+    La note est une estimation basée sur l'expérience des carpistes, pas une garantie de touche.
+  </footer>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+<script src="ponds.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
