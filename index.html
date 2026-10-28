@@ -6,6 +6,11 @@
 <title>Carpomètre</title>
 <meta name="description" content="La météo traduite en touches : note carpe heure par heure, meilleurs créneaux, carte des étangs et carnet de prises.">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="theme-color" content="#1F5A4C">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Carpomètre">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
@@ -14,7 +19,8 @@
 <body>
 <div class="wrap">
   <header>
-    <div class="brand"><h1>Carpomètre</h1><span>la météo traduite en touches</span></div>
+    <div class="brand"><h1>Carpomètre</h1><span>la météo traduite en touches</span>
+      <button type="button" id="install" class="ghost small" hidden>Installer l'appli</button></div>
     <form class="search" id="searchForm" role="search">
       <label for="q" class="sr">Ville ou village</label>
       <input id="q" type="search" placeholder="Ville, village…" autocomplete="off">
@@ -69,7 +75,10 @@
       <div class="map" id="map"></div>
       <div class="pondcard" id="pondcard"><p class="muted">Touchez un étang sur la carte.</p></div>
     </div>
-    <p class="note" id="pondnote">Étangs détaillés + plans d'eau trouvés sur OpenStreetMap dans un rayon de 15 km.</p>
+    <div class="maptools">
+      <p class="note" id="pondnote">Étangs détaillés + plans d'eau trouvés sur OpenStreetMap dans un rayon de 15 km.</p>
+      <button type="button" id="reportBtn" class="ghost">Signaler un étang</button>
+    </div>
   </section>
 
   <section>

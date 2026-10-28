@@ -150,8 +150,7 @@ async function loadPonds(){
   $("pondnote").textContent = "Recherche des plans d'eau autour…";
   const q = `[out:json][timeout:25];(way["natural"="water"]["name"](around:15000,${loc.lat},${loc.lon});relation["natural"="water"]["name"](around:15000,${loc.lat},${loc.lon});nwr["leisure"="fishing"](around:15000,${loc.lat},${loc.lon}););out center tags 80;`;
   try{
-    const r = await fetch("https://overpass-api.de/api/interpreter", {method: "POST", body: "data=" + encodeURIComponent(q), headers: {"Content-Type": "application/x-www-form-urlencoded"}});
-    const j = await r.json();
+    const j = await overpass(q);
     const skip = new Set(["river", "canal", "stream", "ditch", "wastewater", "moat", "fountain"]);
     j.elements.forEach(e => {
       const t = e.tags || {}; if(skip.has(t.water)) return;
@@ -164,14 +163,26 @@ async function loadPonds(){
   }catch{
     $("pondnote").textContent = "Les plans d'eau OpenStreetMap n'ont pas pu être chargés ; seuls les étangs détaillés sont affichés.";
   }
+  reports().forEach(r => ponds.push({...r, curated: false, reported: true}));
   drawPins();
   const near = ponds.filter(p => Math.hypot((p.lat - loc.lat) * 111, (p.lon - loc.lon) * 72) < 20).map(p => [p.lat, p.lon]);
   if(near.length) map.fitBounds([[loc.lat, loc.lon], ...near], {padding: [30, 30], maxZoom: 13});
 }
+/* Overpass : serveur principal puis miroir, 15 s chacun */
+async function overpass(q){
+  for(const url of ["https://overpass-api.de/api/interpreter", "https://overpass.kumi.systems/api/interpreter"]){
+    const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), 15000);
+    try{
+      const r = await fetch(url, {method: "POST", signal: ctl.signal, body: "data=" + encodeURIComponent(q), headers: {"Content-Type": "application/x-www-form-urlencoded"}});
+      if(r.ok) return await r.json();
+    }catch{} finally{ clearTimeout(t); }
+  }
+  throw new Error("overpass");
+}
 function drawPins(){
   pondLayer.clearLayers(); pins = {};
   ponds.forEach(p => {
-    const m = L.marker([p.lat, p.lon], {title: p.name, icon: L.divIcon({className: "", html: `<div class="pin ${p.curated ? "" : "osm"}"></div>`, iconSize: p.curated ? [30, 30] : [22, 22]})});
+    const m = L.marker([p.lat, p.lon], {title: p.name, icon: L.divIcon({className: "", html: `<div class="pin ${p.curated ? "" : "osm"}${p.reported ? " rep" : ""}"></div>`, iconSize: p.curated ? [30, 30] : [22, 22]})});
     m.bindTooltip(p.name, {direction: "top", offset: [0, -14]});
     m.on("click", () => { pondId = pondId === p.id ? null : p.id; render(); });
     m.addTo(pondLayer); pins[p.id] = m;
@@ -183,7 +194,7 @@ function renderPins(){
   ponds.forEach(p => {
     const el = pins[p.id]?.getElement(); if(!el) return;
     const s = score(sel, p.id).s, d = el.querySelector(".pin");
-    d.textContent = s; d.className = `pin ${p.curated ? "" : "osm"} ${cls(s)} ${p.id === pondId ? "on" : ""}`;
+    d.textContent = s; d.className = `pin ${p.curated ? "" : "osm"} ${p.reported ? "rep" : ""} ${cls(s)} ${p.id === pondId ? "on" : ""}`;
     pins[p.id].setZIndexOffset(p.id === pondId ? 1000 : p.curated ? 500 : 0);
   });
 }
@@ -191,7 +202,7 @@ function renderPondCard(){
   const p = ponds.find(x => x.id === pondId);
   if(!p){ $("pondcard").innerHTML = `<p class="muted">Touchez un étang sur la carte pour voir sa fiche et adapter la note à ce plan d'eau.</p>`; return; }
   const r = score(sel, p.id);
-  $("pondcard").innerHTML = `<div class="label">${p.near}${p.approx ? " · position approximative" : ""}</div><h4>${esc(p.name)}</h4>
+  $("pondcard").innerHTML = `<div class="label">${esc(p.near || "")}${p.approx ? " · position approximative" : ""}${p.reported ? " · signalé par vous, en attente" : ""}</div><h4>${esc(p.name)}</h4>
     <dl class="specs">${p.specs.map(([k, v]) => `<div><dt>${k}</dt><dd>${esc(v)}</dd></div>`).join("")}<div><dt>Note à ${r.h} h</dt><dd>${r.s} / 100</dd></div></dl>
     <div class="links">
       <a href="https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lon}" target="_blank" rel="noopener">Itinéraire</a>
@@ -256,6 +267,73 @@ $("geo").addEventListener("click", () => {
     {enableHighAccuracy: false, timeout: 10000});
 });
 function setLoc(l){ loc = l; store.set("loc", l); pondId = null; loadWeather(); loadPonds(); }
+
+/* ---------- Signaler un étang ---------- */
+const REPO = "noamgille-sketch/carpometre";
+function reports(){ return store.get("reports", []); }
+let tempMarker = null;
+$("reportBtn").addEventListener("click", () => {
+  if(!map) return;
+  pondId = null; renderPins();
+  $("pondcard").innerHTML = `<div class="label">Signaler un étang · étape 1 sur 2</div><h4>Touchez la carte à l'endroit de l'étang</h4>
+    <p class="muted">Zoomez avec la molette ou deux doigts pour placer le point précisément.</p>
+    <div class="links"><button type="button" class="ghost" id="rCancel">Annuler</button></div>`;
+  $("rCancel").onclick = cancelReport;
+  $("map").classList.add("placing");
+  $("map").scrollIntoView({behavior: "smooth", block: "center"});
+  map.once("click", e => { $("map").classList.remove("placing"); reportForm(e.latlng); });
+});
+function cancelReport(){
+  map.off("click"); $("map").classList.remove("placing");
+  if(tempMarker){ tempMarker.remove(); tempMarker = null; }
+  renderPondCard();
+}
+function reportForm(ll){
+  if(tempMarker) tempMarker.remove();
+  tempMarker = L.marker(ll, {draggable: true, icon: L.divIcon({className: "", html: `<div class="pin rep">+</div>`, iconSize: [30, 30]})}).addTo(map);
+  $("pondcard").innerHTML = `<div class="label">Signaler un étang · étape 2 sur 2</div><h4>Les infos que vous connaissez</h4>
+    <form class="rform" id="rForm">
+      <div><label for="rName">Nom de l'étang</label><input id="rName" required maxlength="80" placeholder="Étang des Saules"></div>
+      <div><label for="rType">Type</label><select id="rType"><option>Privé</option><option>Public / AAPPMA</option><option>Carpodrome</option><option>Je ne sais pas</option></select></div>
+      <div><label for="rDepth">Profondeur moyenne (m)</label><input id="rDepth" type="number" step="0.5" min="0" max="40"></div>
+      <div><label for="rNight">Pêche de nuit</label><select id="rNight"><option>Je ne sais pas</option><option>Autorisée</option><option>Interdite</option></select></div>
+      <div class="full"><label for="rPrice">Tarifs</label><input id="rPrice" maxlength="80" placeholder="15 € la journée"></div>
+      <div class="full"><label for="rNote">Remarques</label><textarea id="rNote" rows="2" maxlength="300" placeholder="Accès, postes, poissons…"></textarea></div>
+      <div class="full links"><button type="submit">Ajouter l'étang</button><button type="button" class="ghost" id="rCancel">Annuler</button></div>
+    </form><p class="note">Vous pouvez faire glisser le point pour l'ajuster.</p>`;
+  $("rCancel").onclick = cancelReport;
+  $("rName").focus();
+  $("rForm").onsubmit = e => {
+    e.preventDefault();
+    const pos = tempMarker.getLatLng(), depth = parseFloat($("rDepth").value);
+    const r = {id: "rep" + Date.now(), name: $("rName").value.trim(), near: "", lat: +pos.lat.toFixed(5), lon: +pos.lng.toFixed(5),
+      depth: isNaN(depth) ? null : depth, open: null,
+      specs: [["Type", $("rType").value], ["Profondeur", isNaN(depth) ? "Non renseignée" : depth + " m"], ["Pêche de nuit", $("rNight").value], ["Tarifs", $("rPrice").value.trim() || "Non renseignés"]],
+      note: $("rNote").value.trim()};
+    store.set("reports", [...reports(), r]);
+    tempMarker.remove(); tempMarker = null;
+    ponds.push({...r, curated: false, reported: true}); drawPins();
+    pondId = r.id; render();
+    shareReport(r);
+  };
+}
+function shareReport(r){
+  const body = `**${r.name}**\n\nPosition : ${r.lat}, ${r.lon}\nhttps://www.openstreetmap.org/?mlat=${r.lat}&mlon=${r.lon}#map=16/${r.lat}/${r.lon}\n\n` +
+    r.specs.map(([k, v]) => `- ${k} : ${v}`).join("\n") + (r.note ? `\n\nRemarques : ${r.note}` : "");
+  const url = `https://github.com/${REPO}/issues/new?title=${encodeURIComponent("Nouvel étang : " + r.name)}&labels=etang&body=${encodeURIComponent(body)}`;
+  const box = document.createElement("div");
+  box.className = "lock";
+  box.innerHTML = `<b>Ajouté sur votre carte.</b> Pour qu'il apparaisse chez tout le monde, envoyez-le :
+    <div class="links" style="margin-top:8px"><a href="${url}" target="_blank" rel="noopener">Envoyer via GitHub</a><button type="button" class="ghost" id="rCopy">Copier les infos</button></div>`;
+  $("pondcard").appendChild(box);
+  $("rCopy").onclick = async () => { try{ await navigator.clipboard.writeText(body); $("rCopy").textContent = "Copié"; }catch{ $("rCopy").textContent = "Copie impossible"; } };
+}
+
+/* ---------- Appli installable ---------- */
+let installEvt = null;
+window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); installEvt = e; $("install").hidden = false; });
+$("install").addEventListener("click", async () => { if(!installEvt) return; installEvt.prompt(); await installEvt.userChoice; installEvt = null; $("install").hidden = true; });
+if("serviceWorker" in navigator) window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
 
 /* ---------- Événements ---------- */
 $("bars").addEventListener("click", e => { const b = e.target.closest(".bar"); if(b){ sel = +b.dataset.i; renderSel(); } });
